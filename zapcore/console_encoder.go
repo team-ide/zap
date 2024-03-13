@@ -93,22 +93,22 @@ func (c consoleEncoder) EncodeEntry(ent Entry, fields []Field) (*buffer.Buffer, 
 		c.EncodeLevel(ent.Level, arr)
 	}
 
-	if c.TrackKey != "" {
-		var trackValue = ""
+	if c.TraceKey != "" {
+		var traceValue = ""
 		var fs []Field
 		for _, field := range fields {
-			threadValue, ok := field.Interface.(*TrackValue)
+			v, ok := field.Interface.(*TraceValue)
 			if ok {
-				if threadValue.FormatOut != nil {
-					trackValue = threadValue.FormatOut()
+				if v.Format != nil {
+					traceValue = v.Format()
 				} else {
-					trackValue = threadValue.TrackId
+					traceValue = v.TraceId
 				}
 			} else {
 				fs = append(fs, field)
 			}
 		}
-		arr.AppendString(trackValue)
+		arr.AppendString(traceValue)
 		fields = fs
 	}
 	if ent.LoggerName != "" && c.NameKey != "" {
@@ -161,13 +161,13 @@ func (c consoleEncoder) EncodeEntry(ent Entry, fields []Field) (*buffer.Buffer, 
 	return line, nil
 }
 
-type TrackValue struct {
-	TrackId   string        `json:"trackId" bson:"trackId" yaml:"trackId"`
-	FormatOut func() string `json:"-" bson:"-" yaml:"-"` // 默认使用 FormatOut 输出，为 nil 则使用 TrackId 输出
+type TraceValue struct {
+	TraceId string        `json:"traceId" bson:"traceId" yaml:"traceId"`
+	Format  func() string `json:"-" bson:"-" yaml:"-"` // 默认使用 Format 输出，为 nil 则使用 TraceId 输出
 }
 
-func NewTrackValue(trackId string) *TrackValue {
-	return &TrackValue{TrackId: trackId}
+func NewTraceValue(traceId string) *TraceValue {
+	return &TraceValue{TraceId: traceId}
 }
 
 func (c consoleEncoder) writeContext(line *buffer.Buffer, extra []Field) {

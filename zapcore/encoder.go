@@ -335,7 +335,7 @@ type EncoderConfig struct {
 	LevelKey       string `json:"levelKey" yaml:"levelKey"`
 	TimeKey        string `json:"timeKey" yaml:"timeKey"`
 	NameKey        string `json:"nameKey" yaml:"nameKey"`
-	TrackKey       string `json:"trackKey" yaml:"trackKey"`
+	TraceKey       string `json:"traceKey" yaml:"traceKey"`
 	CallerKey      string `json:"callerKey" yaml:"callerKey"`
 	FunctionKey    string `json:"functionKey" yaml:"functionKey"`
 	StacktraceKey  string `json:"stacktraceKey" yaml:"stacktraceKey"`
