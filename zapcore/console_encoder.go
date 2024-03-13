@@ -22,7 +22,6 @@ package zapcore
 
 import (
 	"fmt"
-
 	"go.uber.org/zap/buffer"
 	"go.uber.org/zap/internal/bufferpool"
 	"go.uber.org/zap/internal/pool"
@@ -45,6 +44,8 @@ func putSliceEncoder(e *sliceArrayEncoder) {
 
 type consoleEncoder struct {
 	*jsonEncoder
+	ColBefore string
+	ColAfter  string
 }
 
 // NewConsoleEncoder creates an encoder whose output is designed for human -
@@ -60,11 +61,19 @@ func NewConsoleEncoder(cfg EncoderConfig) Encoder {
 		// Use a default delimiter of '\t' for backwards compatibility
 		cfg.ConsoleSeparator = "\t"
 	}
-	return consoleEncoder{newJSONEncoder(cfg, true)}
+	return consoleEncoder{jsonEncoder: newJSONEncoder(cfg, true)}
+}
+
+func NewConsoleWrapColEncoder(cfg EncoderConfig, colBefore, colAfter string) Encoder {
+	if cfg.ConsoleSeparator == "" {
+		// Use a default delimiter of '\t' for backwards compatibility
+		cfg.ConsoleSeparator = "\t"
+	}
+	return consoleEncoder{jsonEncoder: newJSONEncoder(cfg, true), ColBefore: colBefore, ColAfter: colAfter}
 }
 
 func (c consoleEncoder) Clone() Encoder {
-	return consoleEncoder{c.jsonEncoder.Clone().(*jsonEncoder)}
+	return consoleEncoder{jsonEncoder: c.jsonEncoder.Clone().(*jsonEncoder), ColBefore: c.ColBefore, ColAfter: c.ColAfter}
 }
 
 func (c consoleEncoder) EncodeEntry(ent Entry, fields []Field) (*buffer.Buffer, error) {
@@ -82,6 +91,25 @@ func (c consoleEncoder) EncodeEntry(ent Entry, fields []Field) (*buffer.Buffer, 
 	}
 	if c.LevelKey != "" && c.EncodeLevel != nil {
 		c.EncodeLevel(ent.Level, arr)
+	}
+
+	if c.TrackKey != "" {
+		var trackValue = ""
+		var fs []Field
+		for _, field := range fields {
+			threadValue, ok := field.Interface.(*TrackValue)
+			if ok {
+				if threadValue.FormatOut != nil {
+					trackValue = threadValue.FormatOut()
+				} else {
+					trackValue = threadValue.TrackId
+				}
+			} else {
+				fs = append(fs, field)
+			}
+		}
+		arr.AppendString(trackValue)
+		fields = fs
 	}
 	if ent.LoggerName != "" && c.NameKey != "" {
 		nameEncoder := c.EncodeName
@@ -105,14 +133,18 @@ func (c consoleEncoder) EncodeEntry(ent Entry, fields []Field) (*buffer.Buffer, 
 		if i > 0 {
 			line.AppendString(c.ConsoleSeparator)
 		}
-		fmt.Fprint(line, arr.elems[i])
+		line.AppendString(c.ColBefore)
+		_, _ = fmt.Fprint(line, arr.elems[i])
+		line.AppendString(c.ColAfter)
 	}
 	putSliceEncoder(arr)
 
 	// Add the message itself.
 	if c.MessageKey != "" {
 		c.addSeparatorIfNecessary(line)
+		line.AppendString(c.ColBefore)
 		line.AppendString(ent.Message)
+		line.AppendString(c.ColAfter)
 	}
 
 	// Add any structured context.
@@ -127,6 +159,15 @@ func (c consoleEncoder) EncodeEntry(ent Entry, fields []Field) (*buffer.Buffer, 
 
 	line.AppendString(c.LineEnding)
 	return line, nil
+}
+
+type TrackValue struct {
+	TrackId   string        `json:"trackId" bson:"trackId" yaml:"trackId"`
+	FormatOut func() string `json:"-" bson:"-" yaml:"-"` // 默认使用 FormatOut 输出，为 nil 则使用 TrackId 输出
+}
+
+func NewTrackValue(trackId string) *TrackValue {
+	return &TrackValue{TrackId: trackId}
 }
 
 func (c consoleEncoder) writeContext(line *buffer.Buffer, extra []Field) {
@@ -145,9 +186,11 @@ func (c consoleEncoder) writeContext(line *buffer.Buffer, extra []Field) {
 	}
 
 	c.addSeparatorIfNecessary(line)
+	line.AppendString(c.ColBefore)
 	line.AppendByte('{')
-	line.Write(context.buf.Bytes())
+	_, _ = line.Write(context.buf.Bytes())
 	line.AppendByte('}')
+	line.AppendString(c.ColAfter)
 }
 
 func (c consoleEncoder) addSeparatorIfNecessary(line *buffer.Buffer) {
